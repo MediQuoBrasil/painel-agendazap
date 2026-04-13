@@ -57,6 +57,11 @@
     linkText:       $('#linkText'),
     linkHref:       $('#linkHref'),
     linkClose:      $('#linkClose'),
+    infoOverlay:    $('#infoOverlay'),
+    infoTitle:      $('#infoTitle'),
+    infoText:       $('#infoText'),
+    infoHighlight:  $('#infoHighlight'),
+    infoOk:         $('#infoOk'),
     themeToggle:    $('#themeToggle'),
     iconMoon:       $('#iconMoon'),
     iconSun:        $('#iconSun'),
@@ -294,6 +299,12 @@
             nomeCliente: data.nome_cliente || ''
           };
           renderResults();
+        } else if (data.code === 'NOT_FOUND') {
+          openInfoModal(
+            'Nenhum resultado encontrado',
+            'Não foi possível localizar agendamentos com os dados informados.',
+            'Caso você tenha mais de um número de telefone, tente alterar o número de TELEFONE para sua segunda opção.'
+          );
         } else {
           showToast(data.message || 'Erro ao consultar.', 'error');
         }
@@ -497,6 +508,19 @@
     dom.linkOverlay.style.display = 'none';
   }
 
+  // ─── Modal Informativo (não encontrado) ───────────────────
+
+  function openInfoModal(title, text, highlight) {
+    dom.infoTitle.textContent = title;
+    dom.infoText.textContent = text;
+    dom.infoHighlight.textContent = highlight;
+    dom.infoOverlay.style.display = '';
+  }
+
+  function closeInfoModal() {
+    dom.infoOverlay.style.display = 'none';
+  }
+
   // ─── Voltar ao Formulário ─────────────────────────────────
 
   function voltarForm() {
@@ -549,11 +573,18 @@
       if (e.target === dom.linkOverlay) closeLinkModal();
     });
 
+    // Info modal (não encontrado)
+    dom.infoOk.addEventListener('click', closeInfoModal);
+    dom.infoOverlay.addEventListener('click', function (e) {
+      if (e.target === dom.infoOverlay) closeInfoModal();
+    });
+
     // Fechar modais com ESC
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         closeModal();
         closeLinkModal();
+        closeInfoModal();
       }
     });
   }
