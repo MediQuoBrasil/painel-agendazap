@@ -335,17 +335,6 @@
     card.setAttribute('data-index', index);
     card.style.animationDelay = (index * 0.08) + 's';
 
-    // Badge de status
-    var badgeClass = 'badge-default';
-    var statusLabel = ag.status || 'Agendado';
-    if (ag.status_codigo === 'C') {
-      badgeClass = 'badge-confirmado';
-      statusLabel = 'Confirmado';
-    } else if (ag.status_codigo === 'P') {
-      badgeClass = 'badge-pendente';
-      statusLabel = 'Pendente';
-    }
-
     // Data/hora formatada
     var dtParts = ag.data_inicio.split(' ');
     var dataPart = dtParts[0] || '';
@@ -358,11 +347,6 @@
     var dateObj = new Date(parseInt(dp[2], 10), parseInt(dp[1], 10) - 1, parseInt(dp[0], 10));
     var dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     var diaSemana = dias[dateObj.getDay()] || '';
-
-    // Montar HTML seguro via DOM (não innerHTML) para prevenir XSS
-    var badge = document.createElement('span');
-    badge.className = 'ag-status-badge ' + badgeClass;
-    badge.textContent = statusLabel;
 
     var dtEl = document.createElement('div');
     dtEl.className = 'ag-datetime';
@@ -409,7 +393,6 @@
     actions.appendChild(btnRemarcar);
     actions.appendChild(btnCancelar);
 
-    card.appendChild(badge);
     card.appendChild(dtEl);
     card.appendChild(diaEl);
     card.appendChild(servEl);
