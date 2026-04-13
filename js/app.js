@@ -15,9 +15,9 @@
 
   var CONFIG = {
     // URL do Web App (Google Apps Script) — obtida após deploy
-    API_URL: 'COLE_AQUI_A_URL_DO_DEPLOY_DO_APPS_SCRIPT',
+    API_URL: 'https://script.google.com/macros/s/AKfycbwcKT7iOiz4SAVThp1sd5yIX5htwVgbu-Y264F8zuZ_rH5-MLdAxuP3-1N1_9I_OA9gyg/exec',
     // Token compartilhado com o backend (Script Property: REQUEST_SECRET)
-    REQUEST_SECRET: 'COLE_AQUI_O_MESMO_SECRET_DO_APPS_SCRIPT'
+    REQUEST_SECRET: '-+xB1xWS.[DyVRZAK_Bw3X2d^ESi@I},'
   };
 
   // ─── Estado ───────────────────────────────────────────────
