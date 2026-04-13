@@ -59,7 +59,8 @@
     linkClose:      $('#linkClose'),
     themeToggle:    $('#themeToggle'),
     iconMoon:       $('#iconMoon'),
-    iconSun:        $('#iconSun')
+    iconSun:        $('#iconSun'),
+    yearFooter:     $('#yearFooter')
   };
 
   // ─── Tema ─────────────────────────────────────────────────
@@ -524,6 +525,9 @@
   // ─── Inicialização ────────────────────────────────────────
 
   function init() {
+    // Ano no footer
+    dom.yearFooter.textContent = new Date().getFullYear();
+
     // Tema
     initTheme();
 
