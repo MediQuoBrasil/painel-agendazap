@@ -424,9 +424,25 @@
     pendingAction = { action: action, ref: ref, index: index };
 
     if (action === 'cancelar') {
-      dom.modalTitle.textContent = 'Cancelar agendamento?';
-      dom.modalText.textContent = 'O agendamento de ' + ag.data_inicio + ' (' + ag.servico + ') será cancelado. Essa ação não pode ser desfeita.';
-      dom.modalConfirmText.textContent = 'Confirmar cancelamento';
+      // Detectar Psicologia (id 759) para aviso de cancelamento em lote
+      var isPsicologia = ag.servico_id === 759;
+
+      if (isPsicologia) {
+        // Contar todas as consultas de Psicologia na lista
+        var totalPsico = 0;
+        for (var i = 0; i < state.agendamentos.length; i++) {
+          if (state.agendamentos[i].servico_id === 759) totalPsico++;
+        }
+        dom.modalTitle.textContent = 'Cancelar todas as consultas de Psicologia?';
+        dom.modalText.textContent = totalPsico > 1
+          ? 'Ao cancelar uma consulta de Psicologia, todas as ' + totalPsico + ' consultas futuras desse serviço serão canceladas automaticamente. Essa ação não pode ser desfeita.'
+          : 'A consulta de Psicologia de ' + ag.data_inicio + ' será cancelada. Essa ação não pode ser desfeita.';
+        dom.modalConfirmText.textContent = totalPsico > 1 ? 'Cancelar todas (' + totalPsico + ')' : 'Confirmar cancelamento';
+      } else {
+        dom.modalTitle.textContent = 'Cancelar agendamento?';
+        dom.modalText.textContent = 'O agendamento de ' + ag.data_inicio + ' (' + ag.servico + ') será cancelado. Essa ação não pode ser desfeita.';
+        dom.modalConfirmText.textContent = 'Confirmar cancelamento';
+      }
       dom.modalConfirm.className = 'btn btn-danger btn-sm';
     } else {
       dom.modalTitle.textContent = 'Remarcar agendamento?';
@@ -460,12 +476,18 @@
 
         if (action === 'cancelar') {
           if (data.status === 'success') {
-            // Marcar card como cancelado
-            var card = dom.resultList.querySelector('[data-index="' + index + '"]');
-            if (card) card.classList.add('cancelled');
-            state.agendamentos.splice(index, 1);
-            showToast('Agendamento cancelado com sucesso.', 'success');
-            // Re-render para atualizar índices
+            if (data.tipo === 'lote_psicologia') {
+              // Remover TODAS as consultas de Psicologia da lista
+              var refsRemovidos = data.hashes_cancelados || [];
+              state.agendamentos = state.agendamentos.filter(function(ag) {
+                // Remover se o ref está na lista de cancelados
+                return refsRemovidos.indexOf(ag.ref) === -1;
+              });
+            } else {
+              // Cancelamento individual
+              state.agendamentos.splice(index, 1);
+            }
+            showToast(data.message || 'Agendamento cancelado com sucesso.', 'success');
             renderResults();
           } else {
             showToast(data.message || 'Erro ao cancelar.', 'error');
