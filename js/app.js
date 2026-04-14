@@ -331,20 +331,34 @@
     dom.resultTitle.textContent = 'Olá, ' + greeting;
 
     dom.resultList.innerHTML = '';
-    dom.resultEmpty.style.display = state.agendamentos.length === 0 ? '' : 'none';
 
+    // Filtrar: exibir apenas 1 agendamento por serviço (o mais próximo)
+    // state.agendamentos já vem ordenado por data (mais próximo primeiro)
+    var seenServices = {};
+    var displayItems = []; // { originalIndex, displayOrder }
     for (var i = 0; i < state.agendamentos.length; i++) {
       var ag = state.agendamentos[i];
-      var card = createAgendamentoCard(ag, i);
+      var serviceKey = ag.servico_id != null ? String(ag.servico_id) : ag.servico;
+      if (!seenServices[serviceKey]) {
+        seenServices[serviceKey] = true;
+        displayItems.push(i);
+      }
+    }
+
+    dom.resultEmpty.style.display = displayItems.length === 0 ? '' : 'none';
+
+    for (var j = 0; j < displayItems.length; j++) {
+      var origIdx = displayItems[j];
+      var card = createAgendamentoCard(state.agendamentos[origIdx], origIdx, j);
       dom.resultList.appendChild(card);
     }
   }
 
-  function createAgendamentoCard(ag, index) {
+  function createAgendamentoCard(ag, index, displayOrder) {
     var card = document.createElement('div');
     card.className = 'ag-card';
     card.setAttribute('data-index', index);
-    card.style.animationDelay = (index * 0.08) + 's';
+    card.style.animationDelay = ((displayOrder || 0) * 0.08) + 's';
 
     // Data/hora formatada
     var dtParts = ag.data_inicio.split(' ');
@@ -428,16 +442,9 @@
       var isPsicologia = ag.servico_id === 759;
 
       if (isPsicologia) {
-        // Contar todas as consultas de Psicologia na lista
-        var totalPsico = 0;
-        for (var i = 0; i < state.agendamentos.length; i++) {
-          if (state.agendamentos[i].servico_id === 759) totalPsico++;
-        }
-        dom.modalTitle.textContent = 'Cancelar todas as consultas de Psicologia?';
-        dom.modalText.textContent = totalPsico > 1
-          ? 'Ao cancelar uma consulta de Psicologia, todas as ' + totalPsico + ' consultas futuras desse serviço serão canceladas automaticamente. Essa ação não pode ser desfeita.'
-          : 'A consulta de Psicologia de ' + ag.data_inicio + ' será cancelada. Essa ação não pode ser desfeita.';
-        dom.modalConfirmText.textContent = totalPsico > 1 ? 'Cancelar todas (' + totalPsico + ')' : 'Confirmar cancelamento';
+        dom.modalTitle.textContent = 'Cancelar toda a recorrência de Psicologia?';
+        dom.modalText.textContent = 'Ao cancelar, toda a recorrência futura de Psicologia será cancelada automaticamente — não apenas esta consulta. Essa ação não pode ser desfeita.';
+        dom.modalConfirmText.textContent = 'Cancelar toda a recorrência';
       } else {
         dom.modalTitle.textContent = 'Cancelar agendamento?';
         dom.modalText.textContent = 'O agendamento de ' + ag.data_inicio + ' (' + ag.servico + ') será cancelado. Essa ação não pode ser desfeita.';
@@ -477,11 +484,9 @@
         if (action === 'cancelar') {
           if (data.status === 'success') {
             if (data.tipo === 'lote_psicologia') {
-              // Remover TODAS as consultas de Psicologia da lista
-              var refsRemovidos = data.hashes_cancelados || [];
+              // Remover TODAS as consultas de Psicologia da lista (toda recorrência cancelada)
               state.agendamentos = state.agendamentos.filter(function(ag) {
-                // Remover se o ref está na lista de cancelados
-                return refsRemovidos.indexOf(ag.ref) === -1;
+                return ag.servico_id !== 759;
               });
             } else {
               // Cancelamento individual
