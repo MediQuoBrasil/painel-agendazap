@@ -74,8 +74,6 @@
     resultEmpty:    $('#resultEmpty'),
     btnConsultar:   $('#btnConsultar'),
     btnVoltar:      $('#btnVoltar'),
-    inputNome:      $('#inputNome'),
-    inputDOB:       $('#inputDOB'),
     inputCPF:       $('#inputCPF'),
     inputDDD:       $('#inputDDD'),
     inputTelefone:  $('#inputTelefone'),
@@ -125,15 +123,6 @@
 
   // ─── Máscaras de Input (UX) ───────────────────────────────
 
-  function maskDOB(e) {
-    var v = e.target.value.replace(/\D/g, '').substring(0, 8);
-    var masked = '';
-    if (v.length > 0) masked += v.substring(0, 2);
-    if (v.length > 2) masked += '/' + v.substring(2, 4);
-    if (v.length > 4) masked += '/' + v.substring(4, 8);
-    e.target.value = masked;
-  }
-
   function maskCPF(e) {
     var v = e.target.value.replace(/\D/g, '').substring(0, 11);
     var masked = '';
@@ -178,32 +167,6 @@
   function validateForm() {
     clearErrors();
     var valid = true;
-
-    // Nome
-    var nome = dom.inputNome.value.trim();
-    if (!nome || nome.length < 3) {
-      showFieldError('Nome', 'Informe seu nome completo.');
-      valid = false;
-    } else if (nome.split(/\s+/).length < 2) {
-      showFieldError('Nome', 'Informe nome e sobrenome.');
-      valid = false;
-    }
-
-    // Data de Nascimento
-    var dob = dom.inputDOB.value.trim();
-    var dobMatch = dob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!dobMatch) {
-      showFieldError('DOB', 'Formato: DD/MM/AAAA');
-      valid = false;
-    } else {
-      var d = parseInt(dobMatch[1], 10);
-      var m = parseInt(dobMatch[2], 10);
-      var y = parseInt(dobMatch[3], 10);
-      if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) {
-        showFieldError('DOB', 'Data inválida.');
-        valid = false;
-      }
-    }
 
     // CPF
     var cpf = dom.inputCPF.value.replace(/\D/g, '');
@@ -254,8 +217,6 @@
 
     var payload = {
       action: action,
-      nome: dom.inputNome.value.trim(),
-      data_nascimento: dom.inputDOB.value.trim(),
       cpf: dom.inputCPF.value.replace(/\D/g, ''),
       ddd: ddd,
       telefone: telefone,
@@ -328,7 +289,6 @@
         if (data.status === 'success') {
           state.agendamentos = data.agendamentos || [];
           state.formData = {
-            nome: dom.inputNome.value.trim(),
             nomeCliente: data.nome_cliente || ''
           };
           renderResults();
@@ -359,9 +319,9 @@
 
     var greeting = state.formData.nomeCliente
       ? state.formData.nomeCliente.split(' ')[0]
-      : state.formData.nome.split(' ')[0];
+      : '';
 
-    dom.resultTitle.textContent = 'Olá, ' + greeting;
+    dom.resultTitle.textContent = greeting ? 'Olá, ' + greeting : 'Seus agendamentos';
 
     dom.resultList.innerHTML = '';
 
@@ -599,7 +559,6 @@
     initTheme();
 
     // Máscaras
-    dom.inputDOB.addEventListener('input', maskDOB);
     dom.inputCPF.addEventListener('input', maskCPF);
     dom.inputDDD.addEventListener('input', maskDDD);
     dom.inputTelefone.addEventListener('input', maskTelefone);
