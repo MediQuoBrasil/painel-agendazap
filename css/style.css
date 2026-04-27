@@ -475,6 +475,127 @@ body::before {
   flex-wrap: wrap;
 }
 
+/* ─── Tab Toggle ────────────────────────────────────────── */
+
+.tab-toggle {
+  display: flex;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  margin-bottom: 1.25rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover:not(.active) {
+  color: var(--color-text);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-soft));
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
+}
+
+/* ─── Periodicidade ─────────────────────────────────────── */
+
+.periodicidade-section {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.periodicidade-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.periodicidade-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.periodicidade-content {
+  flex: 1;
+}
+
+.periodicidade-servico {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.15rem;
+}
+
+.periodicidade-info {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.periodicidade-disponivel {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.periodicidade-indisponivel {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+/* ─── Card Passado (sem ações) ──────────────────────────── */
+
+.ag-card.ag-card-past {
+  opacity: 0.85;
+}
+
+.ag-card.ag-card-past .ag-status-badge-inline {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.55rem;
+  border-radius: 99px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.badge-finalizado {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.badge-nao-compareceu {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.badge-confirmado-past {
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-accent);
+}
+
 /* ─── Empty State ───────────────────────────────────────── */
 
 .results-empty {
