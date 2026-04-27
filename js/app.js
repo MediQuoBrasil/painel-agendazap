@@ -58,6 +58,9 @@
   var state = {
     loading: false,
     agendamentos: [],
+    pastAgendamentos: null, // null = não carregado, [] = carregado vazio
+    pastPeriodicidade: [],
+    activeTab: 'futuros', // 'futuros' | 'passados'
     formData: {}
   };
 
@@ -72,6 +75,10 @@
     resultTitle:    $('#resultTitle'),
     resultList:     $('#resultList'),
     resultEmpty:    $('#resultEmpty'),
+    tabToggle:      $('#tabToggle'),
+    tabPassados:    $('#tabPassados'),
+    tabFuturos:     $('#tabFuturos'),
+    periodicidadeSection: $('#periodicidadeSection'),
     btnConsultar:   $('#btnConsultar'),
     btnVoltar:      $('#btnVoltar'),
     inputCPF:       $('#inputCPF'),
@@ -288,6 +295,9 @@
       .then(function (data) {
         if (data.status === 'success') {
           state.agendamentos = data.agendamentos || [];
+          state.pastAgendamentos = null;
+          state.pastPeriodicidade = [];
+          state.activeTab = 'futuros';
           state.formData = {
             nomeCliente: data.nome_cliente || ''
           };
@@ -323,12 +333,47 @@
 
     dom.resultTitle.textContent = greeting ? 'Olá, ' + greeting : 'Seus agendamentos';
 
+    // Garantir tab ativa correta
+    setActiveTab(state.activeTab);
+
+    if (state.activeTab === 'futuros') {
+      renderFuturos();
+    } else {
+      renderPassados();
+    }
+  }
+
+  function setActiveTab(tab) {
+    state.activeTab = tab;
+    dom.tabFuturos.classList.toggle('active', tab === 'futuros');
+    dom.tabPassados.classList.toggle('active', tab === 'passados');
+  }
+
+  function switchTab(tab) {
+    if (state.loading) return;
+    setActiveTab(tab);
+
+    if (tab === 'futuros') {
+      dom.periodicidadeSection.style.display = 'none';
+      renderFuturos();
+    } else {
+      // Lazy-load passados na primeira vez
+      if (state.pastAgendamentos === null) {
+        fetchPassados();
+      } else {
+        renderPassados();
+      }
+    }
+  }
+
+  function renderFuturos() {
+    dom.periodicidadeSection.style.display = 'none';
     dom.resultList.innerHTML = '';
 
     // Filtrar: exibir apenas 1 agendamento por serviço (o mais próximo)
     // state.agendamentos já vem ordenado por data (mais próximo primeiro)
     var seenServices = {};
-    var displayItems = []; // { originalIndex, displayOrder }
+    var displayItems = [];
     for (var i = 0; i < state.agendamentos.length; i++) {
       var ag = state.agendamentos[i];
       var serviceKey = ag.servico_id != null ? String(ag.servico_id) : ag.servico;
@@ -345,6 +390,182 @@
       var card = createAgendamentoCard(state.agendamentos[origIdx], origIdx, j);
       dom.resultList.appendChild(card);
     }
+  }
+
+  function fetchPassados() {
+    state.loading = true;
+
+    // Mostrar loading no resultList
+    dom.resultList.innerHTML = '';
+    dom.resultEmpty.style.display = 'none';
+    dom.periodicidadeSection.style.display = 'none';
+
+    var loadingEl = document.createElement('div');
+    loadingEl.className = 'results-empty';
+    loadingEl.innerHTML = '<span class="spinner" style="border-color: rgba(var(--color-primary-rgb),0.3); border-top-color: var(--color-accent);"></span>';
+    var loadingText = document.createElement('p');
+    loadingText.textContent = 'Carregando agendamentos passados...';
+    loadingText.style.marginTop = '0.75rem';
+    loadingEl.appendChild(loadingText);
+    dom.resultList.appendChild(loadingEl);
+
+    apiCall('consultar_passados')
+      .then(function (data) {
+        if (data.status === 'success') {
+          state.pastAgendamentos = data.agendamentos || [];
+          state.pastPeriodicidade = data.periodicidade || [];
+          renderPassados();
+        } else if (data.code === 'NOT_FOUND') {
+          state.pastAgendamentos = [];
+          state.pastPeriodicidade = [];
+          renderPassados();
+        } else {
+          showToast(data.message || 'Erro ao consultar passados.', 'error');
+        }
+      })
+      .catch(function () {
+        showToast('Falha na conexão. Tente novamente.', 'error');
+        // Voltar para futuros em caso de erro
+        switchTab('futuros');
+      })
+      .finally(function () {
+        state.loading = false;
+      });
+  }
+
+  function renderPassados() {
+    dom.resultList.innerHTML = '';
+
+    // Renderizar periodicidade
+    if (state.pastPeriodicidade.length > 0) {
+      dom.periodicidadeSection.innerHTML = '';
+      dom.periodicidadeSection.style.display = '';
+
+      for (var p = 0; p < state.pastPeriodicidade.length; p++) {
+        var per = state.pastPeriodicidade[p];
+        var perCard = document.createElement('div');
+        perCard.className = 'periodicidade-card';
+
+        // Ícone
+        var iconSvg = document.createElement('div');
+        iconSvg.className = 'periodicidade-icon';
+        if (per.disponivel) {
+          iconSvg.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-success)"><polyline points="20 6 9 17 4 12"/></svg>';
+        } else {
+          iconSvg.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-warning)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        }
+
+        var content = document.createElement('div');
+        content.className = 'periodicidade-content';
+
+        var svcEl = document.createElement('div');
+        svcEl.className = 'periodicidade-servico';
+        svcEl.textContent = per.servico;
+
+        var infoEl = document.createElement('div');
+        infoEl.className = 'periodicidade-info';
+        if (per.disponivel) {
+          infoEl.innerHTML = '';
+          var spanDisp = document.createElement('span');
+          spanDisp.className = 'periodicidade-disponivel';
+          spanDisp.textContent = 'Novo agendamento já disponível';
+          infoEl.appendChild(spanDisp);
+        } else {
+          infoEl.innerHTML = '';
+          var spanIndisp = document.createElement('span');
+          spanIndisp.className = 'periodicidade-indisponivel';
+          spanIndisp.textContent = 'Disponível a partir de ' + per.proximo_disponivel;
+          infoEl.appendChild(spanIndisp);
+        }
+
+        content.appendChild(svcEl);
+        content.appendChild(infoEl);
+        perCard.appendChild(iconSvg);
+        perCard.appendChild(content);
+        dom.periodicidadeSection.appendChild(perCard);
+      }
+    } else {
+      dom.periodicidadeSection.style.display = 'none';
+    }
+
+    // Renderizar cards de passados
+    dom.resultEmpty.style.display = (state.pastAgendamentos || []).length === 0 ? '' : 'none';
+
+    var items = state.pastAgendamentos || [];
+    for (var i = 0; i < items.length; i++) {
+      var card = createPastCard(items[i], i);
+      dom.resultList.appendChild(card);
+    }
+  }
+
+  function createPastCard(ag, displayOrder) {
+    var card = document.createElement('div');
+    card.className = 'ag-card ag-card-past';
+    card.style.animationDelay = ((displayOrder || 0) * 0.06) + 's';
+
+    // Data/hora formatada
+    var dtParts = ag.data_inicio.split(' ');
+    var dataPart = dtParts[0] || '';
+    var horaPart = dtParts[1] || '';
+    var horaFim = ag.data_fim ? ag.data_fim.split(' ')[1] || '' : '';
+    var horaDisplay = horaPart + (horaFim ? ' às ' + horaFim : '');
+
+    // Dia da semana
+    var dp = dataPart.split('/');
+    var dateObj = new Date(parseInt(dp[2], 10), parseInt(dp[1], 10) - 1, parseInt(dp[0], 10));
+    var dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    var diaSemana = dias[dateObj.getDay()] || '';
+
+    var dtEl = document.createElement('div');
+    dtEl.className = 'ag-datetime';
+
+    var dtText = document.createTextNode(dataPart + ' — ' + horaDisplay + ' ');
+    dtEl.appendChild(dtText);
+
+    // Badge de status
+    var badge = document.createElement('span');
+    badge.className = 'ag-status-badge-inline';
+    if (ag.status_codigo === 'F') {
+      badge.classList.add('badge-finalizado');
+      badge.textContent = 'Finalizado';
+    } else if (ag.status_codigo === 'M') {
+      badge.classList.add('badge-nao-compareceu');
+      badge.textContent = 'Não compareceu';
+    } else if (ag.status_codigo === 'C') {
+      badge.classList.add('badge-confirmado-past');
+      badge.textContent = 'Confirmado';
+    } else {
+      badge.classList.add('badge-confirmado-past');
+      badge.textContent = ag.status || 'Realizado';
+    }
+    dtEl.appendChild(badge);
+
+    var diaEl = document.createElement('div');
+    diaEl.className = 'ag-detail';
+    diaEl.textContent = diaSemana;
+
+    var servEl = document.createElement('div');
+    servEl.className = 'ag-detail';
+    var servStrong = document.createElement('strong');
+    servStrong.textContent = 'Serviço: ';
+    servEl.appendChild(servStrong);
+    servEl.appendChild(document.createTextNode(ag.servico || '—'));
+
+    var atenEl = document.createElement('div');
+    atenEl.className = 'ag-detail';
+    var atenStrong = document.createElement('strong');
+    atenStrong.textContent = 'Profissional: ';
+    atenEl.appendChild(atenStrong);
+    atenEl.appendChild(document.createTextNode(ag.atendente || '—'));
+
+    card.appendChild(dtEl);
+    card.appendChild(diaEl);
+    card.appendChild(servEl);
+    card.appendChild(atenEl);
+
+    // SEM botões de ação para passados
+
+    return card;
   }
 
   function createAgendamentoCard(ag, index, displayOrder) {
@@ -547,6 +768,10 @@
     dom.resultSection.style.display = 'none';
     dom.formSection.style.display = '';
     state.agendamentos = [];
+    state.pastAgendamentos = null;
+    state.pastPeriodicidade = [];
+    state.activeTab = 'futuros';
+    dom.periodicidadeSection.style.display = 'none';
   }
 
   // ─── Inicialização ────────────────────────────────────────
@@ -578,6 +803,10 @@
 
     // Voltar
     dom.btnVoltar.addEventListener('click', voltarForm);
+
+    // Tabs
+    dom.tabFuturos.addEventListener('click', function () { switchTab('futuros'); });
+    dom.tabPassados.addEventListener('click', function () { switchTab('passados'); });
 
     // Modal
     dom.modalCancel.addEventListener('click', closeModal);
