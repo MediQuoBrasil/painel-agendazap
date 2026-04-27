@@ -474,7 +474,7 @@
           infoEl.innerHTML = '';
           var spanIndisp = document.createElement('span');
           spanIndisp.className = 'periodicidade-indisponivel';
-          spanIndisp.textContent = 'Disponível a partir de ' + per.proximo_disponivel;
+          spanIndisp.textContent = 'Novo agendamento no serviço disponível a partir de ' + per.proximo_disponivel;
           infoEl.appendChild(spanIndisp);
         }
 
@@ -522,21 +522,15 @@
     var dtText = document.createTextNode(dataPart + ' — ' + horaDisplay + ' ');
     dtEl.appendChild(dtText);
 
-    // Badge de status
+    // Badge de status (tradução amigável para o usuário)
     var badge = document.createElement('span');
     badge.className = 'ag-status-badge-inline';
-    if (ag.status_codigo === 'F') {
-      badge.classList.add('badge-finalizado');
-      badge.textContent = 'Finalizado';
-    } else if (ag.status_codigo === 'M') {
+    if (ag.status_codigo === 'M') {
       badge.classList.add('badge-nao-compareceu');
-      badge.textContent = 'Não compareceu';
-    } else if (ag.status_codigo === 'C') {
-      badge.classList.add('badge-confirmado-past');
-      badge.textContent = 'Confirmado';
+      badge.textContent = 'Você faltou!';
     } else {
-      badge.classList.add('badge-confirmado-past');
-      badge.textContent = ag.status || 'Realizado';
+      badge.classList.add('badge-finalizado');
+      badge.textContent = 'Consulta realizada';
     }
     dtEl.appendChild(badge);
 
