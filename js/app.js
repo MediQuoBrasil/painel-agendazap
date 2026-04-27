@@ -7,6 +7,39 @@
  *  Nenhum token, hash ou dado sensível fica exposto no cliente.
  */
 
+/**
+ * ─── Warm-up + Reload paliativo ─────────────────────────────
+ *
+ * Problema: o Google Apps Script sofre de "cold start" — a primeira
+ * requisição após inatividade pode demorar 10-20s ou retornar erro 500.
+ * Ao recarregar, o GAS já está quente e responde normalmente.
+ *
+ * Estratégia (por sessão de aba, via sessionStorage):
+ *  1. Na primeira visita da aba, dispara um GET silencioso para o GAS
+ *     (warm-up / preflight), acordando o container.
+ *  2. Recarrega a página uma única vez. Na volta, o GAS já está pronto
+ *     e o formulário ainda está vazio — sem perda de dados.
+ *  3. O flag "painel_ready" garante que isso ocorra apenas 1× por aba.
+ */
+(function () {
+  var WARMUP_KEY = 'painel_ready';
+
+  // Já recarregou nesta aba? Segue normalmente.
+  if (sessionStorage.getItem(WARMUP_KEY)) return;
+
+  // Marca antes de recarregar para não entrar em loop
+  sessionStorage.setItem(WARMUP_KEY, '1');
+
+  // Dispara warm-up GET silencioso (acorda o GAS sem esperar resposta)
+  var gasUrl = 'https://script.google.com/macros/s/AKfycbwcKT7iOiz4SAVThp1sd5yIX5htwVgbu-Y264F8zuZ_rH5-MLdAxuP3-1N1_9I_OA9gyg/exec';
+  try { fetch(gasUrl, { method: 'GET', mode: 'no-cors' }); } catch (_) {}
+
+  // Pequeno delay para o warm-up sair antes do reload
+  setTimeout(function () {
+    window.location.reload();
+  }, 300);
+})();
+
 (function () {
   'use strict';
 
