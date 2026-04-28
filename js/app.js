@@ -84,6 +84,7 @@
     inputCPF:       $('#inputCPF'),
     inputDDD:       $('#inputDDD'),
     inputTelefone:  $('#inputTelefone'),
+    checkSalvar:    $('#checkSalvar'),
     modalOverlay:   $('#modalOverlay'),
     modalTitle:     $('#modalTitle'),
     modalText:      $('#modalText'),
@@ -216,6 +217,39 @@
     return r === parseInt(cpf[10], 10);
   }
 
+  // ─── Persistência de Dados (localStorage) ───────────────────
+
+  var STORAGE_KEY = 'painel_dados_usuario';
+
+  function salvarDadosLocal() {
+    if (!dom.checkSalvar.checked) return;
+    try {
+      var dados = {
+        cpf: dom.inputCPF.value,
+        ddd: dom.inputDDD.value,
+        telefone: dom.inputTelefone.value
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+    } catch (_) {}
+  }
+
+  function limparDadosLocal() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_) {}
+  }
+
+  function carregarDadosLocal() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var dados = JSON.parse(raw);
+      if (dados.cpf) dom.inputCPF.value = dados.cpf;
+      if (dados.ddd) dom.inputDDD.value = dados.ddd;
+      if (dados.telefone) dom.inputTelefone.value = dados.telefone;
+    } catch (_) {}
+  }
+
   // ─── Comunicação com Backend ──────────────────────────────
 
   function apiCall(action, extraData) {
@@ -294,6 +328,7 @@
     apiCall('consultar')
       .then(function (data) {
         if (data.status === 'success') {
+          salvarDadosLocal();
           state.agendamentos = data.agendamentos || [];
           state.pastAgendamentos = null;
           state.pastPeriodicidade = [];
@@ -303,12 +338,14 @@
           };
           renderResults();
         } else if (data.code === 'NOT_FOUND') {
+          limparDadosLocal();
           openInfoModal(
             'Nenhum resultado encontrado',
             'Não foi possível localizar agendamentos com os dados informados.',
             'Caso você tenha mais de um número de telefone, tente alterar o número de TELEFONE para sua segunda opção.'
           );
         } else {
+          limparDadosLocal();
           showToast(data.message || 'Erro ao consultar.', 'error');
         }
       })
@@ -817,6 +854,14 @@
 
     // Tema
     initTheme();
+
+    // Carregar dados salvos do localStorage
+    carregarDadosLocal();
+
+    // Checkbox: ao desmarcar, limpa dados salvos
+    dom.checkSalvar.addEventListener('change', function () {
+      if (!dom.checkSalvar.checked) limparDadosLocal();
+    });
 
     // Máscaras
     dom.inputCPF.addEventListener('input', maskCPF);
