@@ -1,66 +1,97 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  PAINEL DE AGENDAMENTOS — Frontend (app.js)
+ *  PAINEL DE AGENDAMENTOS — Frontend (app.js) v2.0
  * ═══════════════════════════════════════════════════════════
  *
  *  Toda validação aqui é UX-only. Segurança real está no backend.
  *  Nenhum token, hash ou dado sensível fica exposto no cliente.
- */
-
-/**
- * ─── Warm-up + Reload paliativo ─────────────────────────────
  *
- * Problema: o Google Apps Script sofre de "cold start" — a primeira
- * requisição após inatividade pode demorar 10-20s ou retornar erro 500.
- * Ao recarregar, o GAS já está quente e responde normalmente.
- *
- * Estratégia (por sessão de aba, via sessionStorage):
- *  1. Na primeira visita da aba, dispara um GET silencioso para o GAS
- *     (warm-up / preflight), acordando o container.
- *  2. Recarrega a página uma única vez. Na volta, o GAS já está pronto
- *     e o formulário ainda está vazio — sem perda de dados.
- *  3. O flag "painel_ready" garante que isso ocorra apenas 1× por aba.
+ *  v2.0 — Melhorias de resiliência:
+ *    - Warm-up inteligente (sem reload agressivo)
+ *    - Retry com backoff exponencial em todas as chamadas ao GAS
+ *    - Dados do formulário preservados em caso de erro de servidor
+ *    - Feedback visual mais granular durante loading/retry
  */
-(function () {
-  var WARMUP_KEY = 'painel_ready';
-
-  // Já recarregou nesta aba? Segue normalmente.
-  if (sessionStorage.getItem(WARMUP_KEY)) return;
-
-  // Marca antes de recarregar para não entrar em loop
-  sessionStorage.setItem(WARMUP_KEY, '1');
-
-  // Dispara warm-up GET silencioso (acorda o GAS sem esperar resposta)
-  var gasUrl = 'https://script.google.com/macros/s/AKfycbwcKT7iOiz4SAVThp1sd5yIX5htwVgbu-Y264F8zuZ_rH5-MLdAxuP3-1N1_9I_OA9gyg/exec';
-  try { fetch(gasUrl, { method: 'GET', mode: 'no-cors' }); } catch (_) {}
-
-  // Pequeno delay para o warm-up sair antes do reload
-  setTimeout(function () {
-    window.location.reload();
-  }, 300);
-})();
 
 (function () {
   'use strict';
 
   // ─── Configuração ─────────────────────────────────────────
-  // ALTERE ESTES VALORES para o seu deploy:
 
   var CONFIG = {
-    // URL do Web App (Google Apps Script) — obtida após deploy
     API_URL: 'https://script.google.com/macros/s/AKfycbwcKT7iOiz4SAVThp1sd5yIX5htwVgbu-Y264F8zuZ_rH5-MLdAxuP3-1N1_9I_OA9gyg/exec',
-    // Token compartilhado com o backend (Script Property: REQUEST_SECRET)
-    REQUEST_SECRET: '-+xB1xWS.[DyVRZAK_Bw3X2d^ESi@I},'
+    REQUEST_SECRET: '-+xB1xWS.[DyVRZAK_Bw3X2d^ESi@I},',
+
+    // Retry config
+    MAX_RETRIES: 3,          // Tentativas no frontend (backend já faz 5 internamente)
+    BASE_DELAY_MS: 1500,     // Delay base para backoff (ms)
+    MAX_DELAY_MS: 10000,     // Delay máximo (ms)
+
+    // Warm-up config
+    WARMUP_INTERVAL_MS: 240000,  // Ping silencioso a cada 4 min enquanto a aba estiver aberta
+    WARMUP_KEY: 'painel_gas_ready'
   };
+
+  // ─── Warm-up Inteligente ──────────────────────────────────
+  //
+  // Em vez de recarregar a página (que não funciona bem), fazemos:
+  //  1. Ao carregar a página, dispara um POST ping silencioso ao GAS.
+  //  2. Enquanto a aba estiver ativa, repete o ping a cada 4 min
+  //     para manter o container quente.
+  //  3. Quando o usuário submete o formulário, se o GAS ainda não
+  //     respondeu ao ping, o primeiro retry naturalmente absorve
+  //     o cold start.
+
+  var gasReady = false;
+
+  function warmUpGAS() {
+    var payload = JSON.stringify({
+      action: 'ping',
+      _token: CONFIG.REQUEST_SECRET
+    });
+
+    fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      redirect: 'follow',
+      body: payload
+    })
+    .then(function (resp) {
+      if (resp.ok) {
+        gasReady = true;
+        sessionStorage.setItem(CONFIG.WARMUP_KEY, '1');
+      }
+    })
+    .catch(function () {
+      // Silencioso — o retry na chamada real vai absorver
+    });
+  }
+
+  // Dispara imediatamente
+  warmUpGAS();
+
+  // Repete enquanto a aba estiver aberta
+  var warmUpTimer = setInterval(warmUpGAS, CONFIG.WARMUP_INTERVAL_MS);
+
+  // Para o timer quando a aba fica inativa (economiza recursos)
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      clearInterval(warmUpTimer);
+    } else {
+      // Retomou — ping imediato + reinicia o timer
+      warmUpGAS();
+      warmUpTimer = setInterval(warmUpGAS, CONFIG.WARMUP_INTERVAL_MS);
+    }
+  });
 
   // ─── Estado ───────────────────────────────────────────────
 
   var state = {
     loading: false,
     agendamentos: [],
-    pastAgendamentos: null, // null = não carregado, [] = carregado vazio
+    pastAgendamentos: null,
     pastPeriodicidade: [],
-    activeTab: 'futuros', // 'futuros' | 'passados'
+    activeTab: 'futuros',
     formData: {}
   };
 
@@ -141,13 +172,8 @@
     e.target.value = masked;
   }
 
-  function maskOnlyDigits(e) {
-    e.target.value = e.target.value.replace(/\D/g, '');
-  }
-
   function maskDDD(e) {
     var v = e.target.value.replace(/\D/g, '').substring(0, 2);
-    // Bloqueia 0 como primeiro dígito
     if (v.length > 0 && v[0] === '0') v = v.substring(1);
     e.target.value = v;
   }
@@ -176,7 +202,6 @@
     clearErrors();
     var valid = true;
 
-    // CPF
     var cpf = dom.inputCPF.value.replace(/\D/g, '');
     if (cpf.length !== 11) {
       showFieldError('CPF', 'CPF deve ter 11 dígitos.');
@@ -186,14 +211,12 @@
       valid = false;
     }
 
-    // DDD
     var ddd = dom.inputDDD.value.replace(/\D/g, '');
     if (ddd.length !== 2 || parseInt(ddd, 10) < 11) {
       showFieldError('DDD', 'DDD inválido.');
       valid = false;
     }
 
-    // Telefone
     var tel = dom.inputTelefone.value.replace(/\D/g, '');
     if (tel.length < 8 || tel.length > 9) {
       showFieldError('Telefone', 'Informe 8 ou 9 dígitos.');
@@ -250,9 +273,41 @@
     } catch (_) {}
   }
 
-  // ─── Comunicação com Backend ──────────────────────────────
+  // ─── Comunicação com Backend (COM RETRY) ──────────────────
 
-  function apiCall(action, extraData) {
+  /**
+   * Calcula delay com exponential backoff + jitter
+   */
+  function calcDelay(attempt) {
+    var exponential = CONFIG.BASE_DELAY_MS * Math.pow(2, attempt - 1);
+    var jitter = Math.floor(Math.random() * CONFIG.BASE_DELAY_MS * 0.5);
+    return Math.min(exponential + jitter, CONFIG.MAX_DELAY_MS);
+  }
+
+  /**
+   * Determina se o erro vale retry no frontend.
+   * Erros de validação (CPF, DDD etc.) e NOT_FOUND não devem ser retentados.
+   */
+  function isRetryableError(data) {
+    if (!data) return true; // Resposta vazia / network error
+    var code = data.code || '';
+    // Erros de input/validação ou dados não encontrados → não retry
+    var noRetry = [
+      'INVALID_CPF', 'INVALID_DDD', 'INVALID_TELEFONE', 'INVALID_INPUT',
+      'INVALID_REF', 'NOT_FOUND', 'RATE_LIMIT', 'FORBIDDEN',
+      'DEADLINE_EXCEEDED', 'PARSE_ERROR', 'UNKNOWN_ACTION'
+    ];
+    if (noRetry.indexOf(code) !== -1) return false;
+    // Erros de servidor / temporários → retry
+    return true;
+  }
+
+  /**
+   * Chamada com retry automático.
+   * Tenta até CONFIG.MAX_RETRIES vezes com backoff exponencial.
+   * Atualiza o texto do botão com número da tentativa.
+   */
+  function apiCall(action, extraData, options) {
     var ddd = dom.inputDDD.value.replace(/\D/g, '');
     var telefone = dom.inputTelefone.value.replace(/\D/g, '');
 
@@ -270,16 +325,62 @@
       }
     }
 
-    return fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      redirect: 'follow',
-      body: JSON.stringify(payload)
-    })
-    .then(function (resp) {
-      if (!resp.ok) throw new Error('Erro de rede');
-      return resp.json();
-    });
+    var opts = options || {};
+    var maxRetries = opts.maxRetries || CONFIG.MAX_RETRIES;
+    var loaderEl = opts.loaderEl || null;  // Elemento .btn-loader para atualizar texto
+
+    function attempt(n) {
+      // Atualizar feedback visual com número da tentativa
+      if (loaderEl && n > 1) {
+        var loaderTextNode = loaderEl.lastChild;
+        if (loaderTextNode && loaderTextNode.nodeType === 3) {
+          loaderTextNode.textContent = ' Tentativa ' + n + '/' + maxRetries + '...';
+        }
+      }
+
+      return fetch(CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        redirect: 'follow',
+        body: JSON.stringify(payload)
+      })
+      .then(function (resp) {
+        if (!resp.ok) {
+          // HTTP error do GAS (502, 503, etc.)
+          throw new Error('HTTP_' + resp.status);
+        }
+        return resp.text().then(function (text) {
+          // GAS às vezes retorna HTML de erro em vez de JSON
+          if (!text || text.charAt(0) !== '{') {
+            throw new Error('INVALID_RESPONSE');
+          }
+          return JSON.parse(text);
+        });
+      })
+      .then(function (data) {
+        // Resposta válida — verificar se é erro retryable
+        if (data.status === 'error' && isRetryableError(data) && n < maxRetries) {
+          var delay = calcDelay(n);
+          return new Promise(function (resolve) {
+            setTimeout(function () { resolve(attempt(n + 1)); }, delay);
+          });
+        }
+        return data;
+      })
+      .catch(function (err) {
+        // Network error, timeout, resposta inválida
+        if (n < maxRetries) {
+          var delay = calcDelay(n);
+          return new Promise(function (resolve) {
+            setTimeout(function () { resolve(attempt(n + 1)); }, delay);
+          });
+        }
+        // Todas as tentativas falharam
+        throw err;
+      });
+    }
+
+    return attempt(1);
   }
 
   // ─── Toast ────────────────────────────────────────────────
@@ -313,6 +414,14 @@
     if (textEl) textEl.style.display = isLoading ? 'none' : '';
     if (loaderEl) loaderEl.style.display = isLoading ? 'inline-flex' : 'none';
     btn.disabled = isLoading;
+
+    // Resetar texto do loader
+    if (isLoading && loaderEl) {
+      var textNode = loaderEl.lastChild;
+      if (textNode && textNode.nodeType === 3) {
+        textNode.textContent = ' Consultando...';
+      }
+    }
   }
 
   // ─── Consultar ────────────────────────────────────────────
@@ -325,7 +434,9 @@
     state.loading = true;
     setLoading(dom.btnConsultar, true);
 
-    apiCall('consultar')
+    var loaderEl = dom.btnConsultar.querySelector('.btn-loader');
+
+    apiCall('consultar', null, { loaderEl: loaderEl })
       .then(function (data) {
         if (data.status === 'success') {
           salvarDadosLocal();
@@ -338,6 +449,7 @@
           };
           renderResults();
         } else if (data.code === 'NOT_FOUND') {
+          // Apenas NOT_FOUND limpa dados — erros de servidor NÃO limpam
           limparDadosLocal();
           openInfoModal(
             'Nenhum resultado encontrado',
@@ -345,12 +457,13 @@
             'Caso você tenha mais de um número de telefone, tente alterar o número de TELEFONE para sua segunda opção.'
           );
         } else {
-          limparDadosLocal();
-          showToast(data.message || 'Erro ao consultar.', 'error');
+          // Erro que não é NOT_FOUND: NÃO limpar dados salvos
+          showToast(data.message || 'Erro ao consultar. Tente novamente.', 'error');
         }
       })
       .catch(function () {
-        showToast('Falha na conexão. Tente novamente.', 'error');
+        // Falha total (network) — NÃO limpar dados salvos
+        showToast('Falha na conexão após múltiplas tentativas. Verifique sua internet e tente novamente.', 'error');
       })
       .finally(function () {
         state.loading = false;
@@ -370,7 +483,6 @@
 
     dom.resultTitle.textContent = greeting ? 'Olá, ' + greeting : 'Seus agendamentos';
 
-    // Garantir tab ativa correta
     setActiveTab(state.activeTab);
 
     if (state.activeTab === 'futuros') {
@@ -394,7 +506,6 @@
       dom.periodicidadeSection.style.display = 'none';
       renderFuturos();
     } else {
-      // Lazy-load passados na primeira vez
       if (state.pastAgendamentos === null) {
         fetchPassados();
       } else {
@@ -407,8 +518,6 @@
     dom.periodicidadeSection.style.display = 'none';
     dom.resultList.innerHTML = '';
 
-    // Filtrar: exibir apenas 1 agendamento por serviço (o mais próximo)
-    // state.agendamentos já vem ordenado por data (mais próximo primeiro)
     var seenServices = {};
     var displayItems = [];
     for (var i = 0; i < state.agendamentos.length; i++) {
@@ -432,17 +541,21 @@
   function fetchPassados() {
     state.loading = true;
 
-    // Mostrar loading no resultList
     dom.resultList.innerHTML = '';
     dom.resultEmpty.style.display = 'none';
     dom.periodicidadeSection.style.display = 'none';
 
     var loadingEl = document.createElement('div');
     loadingEl.className = 'results-empty';
-    loadingEl.innerHTML = '<span class="spinner" style="border-color: rgba(var(--color-primary-rgb),0.3); border-top-color: var(--color-accent);"></span>';
+    var spinnerEl = document.createElement('span');
+    spinnerEl.className = 'spinner';
+    spinnerEl.style.borderColor = 'rgba(var(--color-primary-rgb),0.3)';
+    spinnerEl.style.borderTopColor = 'var(--color-accent)';
+    loadingEl.appendChild(spinnerEl);
     var loadingText = document.createElement('p');
     loadingText.textContent = 'Carregando agendamentos passados...';
     loadingText.style.marginTop = '0.75rem';
+    loadingText.id = 'passadosLoadingText';
     loadingEl.appendChild(loadingText);
     dom.resultList.appendChild(loadingEl);
 
@@ -457,12 +570,17 @@
           state.pastPeriodicidade = [];
           renderPassados();
         } else {
-          showToast(data.message || 'Erro ao consultar passados.', 'error');
+          // Erro de servidor — NÃO limpar dados, mostrar toast
+          showToast(data.message || 'Erro ao consultar passados. Tente novamente.', 'error');
+          // Renderizar lista vazia mas permitir retry
+          state.pastAgendamentos = [];
+          renderPassados();
         }
       })
       .catch(function () {
-        showToast('Falha na conexão. Tente novamente.', 'error');
-        // Voltar para futuros em caso de erro
+        showToast('Falha na conexão ao buscar agendamentos passados. Tente novamente.', 'error');
+        // Resetar para permitir retry no próximo clique na tab
+        state.pastAgendamentos = null;
         switchTab('futuros');
       })
       .finally(function () {
@@ -473,7 +591,6 @@
   function renderPassados() {
     dom.resultList.innerHTML = '';
 
-    // Renderizar periodicidade
     if (state.pastPeriodicidade.length > 0) {
       dom.periodicidadeSection.innerHTML = '';
       dom.periodicidadeSection.style.display = '';
@@ -483,7 +600,6 @@
         var perCard = document.createElement('div');
         perCard.className = 'periodicidade-card';
 
-        // Ícone
         var iconSvg = document.createElement('div');
         iconSvg.className = 'periodicidade-icon';
         if (per.disponivel) {
@@ -502,13 +618,11 @@
         var infoEl = document.createElement('div');
         infoEl.className = 'periodicidade-info';
         if (per.disponivel) {
-          infoEl.innerHTML = '';
           var spanDisp = document.createElement('span');
           spanDisp.className = 'periodicidade-disponivel';
           spanDisp.textContent = 'Novo agendamento já disponível';
           infoEl.appendChild(spanDisp);
         } else {
-          infoEl.innerHTML = '';
           var spanIndisp = document.createElement('span');
           spanIndisp.className = 'periodicidade-indisponivel';
           spanIndisp.textContent = 'Novo agendamento no serviço disponível a partir de ' + per.proximo_disponivel;
@@ -525,7 +639,6 @@
       dom.periodicidadeSection.style.display = 'none';
     }
 
-    // Renderizar cards de passados
     dom.resultEmpty.style.display = (state.pastAgendamentos || []).length === 0 ? '' : 'none';
 
     var items = state.pastAgendamentos || [];
@@ -540,14 +653,12 @@
     card.className = 'ag-card ag-card-past';
     card.style.animationDelay = ((displayOrder || 0) * 0.06) + 's';
 
-    // Data/hora formatada
     var dtParts = ag.data_inicio.split(' ');
     var dataPart = dtParts[0] || '';
     var horaPart = dtParts[1] || '';
     var horaFim = ag.data_fim ? ag.data_fim.split(' ')[1] || '' : '';
     var horaDisplay = horaPart + (horaFim ? ' às ' + horaFim : '');
 
-    // Dia da semana
     var dp = dataPart.split('/');
     var dateObj = new Date(parseInt(dp[2], 10), parseInt(dp[1], 10) - 1, parseInt(dp[0], 10));
     var dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -559,7 +670,6 @@
     var dtText = document.createTextNode(dataPart + ' — ' + horaDisplay + ' ');
     dtEl.appendChild(dtText);
 
-    // Badge de status (tradução amigável para o usuário)
     var badge = document.createElement('span');
     badge.className = 'ag-status-badge-inline';
     if (ag.status_codigo === 'M') {
@@ -594,8 +704,6 @@
     card.appendChild(servEl);
     card.appendChild(atenEl);
 
-    // SEM botões de ação para passados
-
     return card;
   }
 
@@ -605,14 +713,12 @@
     card.setAttribute('data-index', index);
     card.style.animationDelay = ((displayOrder || 0) * 0.08) + 's';
 
-    // Data/hora formatada
     var dtParts = ag.data_inicio.split(' ');
     var dataPart = dtParts[0] || '';
     var horaPart = dtParts[1] || '';
     var horaFim = ag.data_fim ? ag.data_fim.split(' ')[1] || '' : '';
     var horaDisplay = horaPart + (horaFim ? ' às ' + horaFim : '');
 
-    // Dia da semana
     var dp = dataPart.split('/');
     var dateObj = new Date(parseInt(dp[2], 10), parseInt(dp[1], 10) - 1, parseInt(dp[0], 10));
     var dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -640,12 +746,10 @@
     atenEl.appendChild(atenStrong);
     atenEl.appendChild(document.createTextNode(ag.atendente || '—'));
 
-    // Botões (ou aviso de prazo excedido)
     var actions = document.createElement('div');
     actions.className = 'ag-actions';
 
     if (ag.bloqueado) {
-      // Prazo excedido — sem botões, apenas aviso
       actions.className = 'ag-actions ag-actions-blocked';
       var avisoEl = document.createElement('div');
       avisoEl.className = 'ag-blocked-notice';
@@ -687,7 +791,7 @@
       var btnRemarcar = document.createElement('button');
       btnRemarcar.type = 'button';
       btnRemarcar.className = 'btn btn-reschedule btn-sm';
-      btnRemarcar.innerHTML = '<span class="btn-text">Remarcar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
+      btnRemarcar.innerHTML = '<span class="btn-text">Remarcar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span> Processando...</span>';
       btnRemarcar.addEventListener('click', function (ref, idx) {
         return function () { openModal('remarcar', ref, idx); };
       }(ag.ref, index));
@@ -695,7 +799,7 @@
       var btnCancelar = document.createElement('button');
       btnCancelar.type = 'button';
       btnCancelar.className = 'btn btn-cancel-card btn-sm';
-      btnCancelar.innerHTML = '<span class="btn-text">Cancelar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
+      btnCancelar.innerHTML = '<span class="btn-text">Cancelar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span> Processando...</span>';
       btnCancelar.addEventListener('click', function (ref, idx) {
         return function () { openModal('cancelar', ref, idx); };
       }(ag.ref, index));
@@ -724,7 +828,6 @@
     pendingAction = { action: action, ref: ref, index: index };
 
     if (action === 'cancelar') {
-      // Detectar Psicologia (id 759) para aviso de cancelamento em lote
       var isPsicologia = ag.servico_id === 759;
 
       if (isPsicologia) {
@@ -770,12 +873,10 @@
         if (action === 'cancelar') {
           if (data.status === 'success') {
             if (data.tipo === 'lote_psicologia') {
-              // Remover TODAS as consultas de Psicologia da lista (toda recorrência cancelada)
               state.agendamentos = state.agendamentos.filter(function(ag) {
                 return ag.servico_id !== 759;
               });
             } else {
-              // Cancelamento individual
               state.agendamentos.splice(index, 1);
             }
             showToast(data.message || 'Agendamento cancelado com sucesso.', 'success');
@@ -801,7 +902,7 @@
       })
       .catch(function () {
         closeModal();
-        showToast('Falha na conexão. Tente novamente.', 'error');
+        showToast('Falha na conexão após múltiplas tentativas. Tente novamente.', 'error');
       })
       .finally(function () {
         state.loading = false;
@@ -821,7 +922,7 @@
     dom.linkOverlay.style.display = 'none';
   }
 
-  // ─── Modal Informativo (não encontrado) ───────────────────
+  // ─── Modal Informativo ────────────────────────────────────
 
   function openInfoModal(title, text, highlight) {
     dom.infoTitle.textContent = title;
@@ -849,65 +950,49 @@
   // ─── Inicialização ────────────────────────────────────────
 
   function init() {
-    // Ano no footer
     dom.yearFooter.textContent = new Date().getFullYear();
 
-    // Tema
     initTheme();
 
-    // Carregar dados salvos do localStorage
     carregarDadosLocal();
 
-    // Checkbox: ao desmarcar, limpa dados salvos
     dom.checkSalvar.addEventListener('change', function () {
       if (!dom.checkSalvar.checked) limparDadosLocal();
     });
 
-    // Máscaras
     dom.inputCPF.addEventListener('input', maskCPF);
     dom.inputDDD.addEventListener('input', maskDDD);
     dom.inputTelefone.addEventListener('input', maskTelefone);
 
-    // Prevenir paste de caracteres indevidos
     [dom.inputDDD, dom.inputTelefone].forEach(function (el) {
-      el.addEventListener('paste', function (e) {
-        var text = (e.clipboardData || window.clipboardData).getData('text');
-        if (/\D/.test(text.replace(/\D/g, ''))) {
-          // Permite paste mas limpa depois
-        }
+      el.addEventListener('paste', function () {
+        // Permite paste — a máscara limpa depois
       });
     });
 
-    // Submit
     dom.form.addEventListener('submit', handleConsulta);
 
-    // Voltar
     dom.btnVoltar.addEventListener('click', voltarForm);
 
-    // Tabs
     dom.tabFuturos.addEventListener('click', function () { switchTab('futuros'); });
     dom.tabPassados.addEventListener('click', function () { switchTab('passados'); });
 
-    // Modal
     dom.modalCancel.addEventListener('click', closeModal);
     dom.modalConfirm.addEventListener('click', confirmAction);
     dom.modalOverlay.addEventListener('click', function (e) {
       if (e.target === dom.modalOverlay) closeModal();
     });
 
-    // Link modal
     dom.linkClose.addEventListener('click', closeLinkModal);
     dom.linkOverlay.addEventListener('click', function (e) {
       if (e.target === dom.linkOverlay) closeLinkModal();
     });
 
-    // Info modal (não encontrado)
     dom.infoOk.addEventListener('click', closeInfoModal);
     dom.infoOverlay.addEventListener('click', function (e) {
       if (e.target === dom.infoOverlay) closeInfoModal();
     });
 
-    // Fechar modais com ESC
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         closeModal();
