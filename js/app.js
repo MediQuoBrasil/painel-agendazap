@@ -603,28 +603,69 @@
     atenEl.appendChild(atenStrong);
     atenEl.appendChild(document.createTextNode(ag.atendente || '—'));
 
-    // Botões
+    // Botões (ou aviso de prazo excedido)
     var actions = document.createElement('div');
     actions.className = 'ag-actions';
 
-    var btnRemarcar = document.createElement('button');
-    btnRemarcar.type = 'button';
-    btnRemarcar.className = 'btn btn-reschedule btn-sm';
-    btnRemarcar.innerHTML = '<span class="btn-text">Remarcar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
-    btnRemarcar.addEventListener('click', function (ref, idx) {
-      return function () { openModal('remarcar', ref, idx); };
-    }(ag.ref, index));
+    if (ag.bloqueado) {
+      // Prazo excedido — sem botões, apenas aviso
+      actions.className = 'ag-actions ag-actions-blocked';
+      var avisoEl = document.createElement('div');
+      avisoEl.className = 'ag-blocked-notice';
 
-    var btnCancelar = document.createElement('button');
-    btnCancelar.type = 'button';
-    btnCancelar.className = 'btn btn-cancel-card btn-sm';
-    btnCancelar.innerHTML = '<span class="btn-text">Cancelar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
-    btnCancelar.addEventListener('click', function (ref, idx) {
-      return function () { openModal('cancelar', ref, idx); };
-    }(ag.ref, index));
+      var avisoIcon = document.createElement('svg');
+      avisoIcon.setAttribute('width', '16');
+      avisoIcon.setAttribute('height', '16');
+      avisoIcon.setAttribute('viewBox', '0 0 24 24');
+      avisoIcon.setAttribute('fill', 'none');
+      avisoIcon.setAttribute('stroke', 'currentColor');
+      avisoIcon.setAttribute('stroke-width', '2');
+      avisoIcon.setAttribute('stroke-linecap', 'round');
+      avisoIcon.setAttribute('stroke-linejoin', 'round');
+      var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', '12');
+      circle.setAttribute('cy', '12');
+      circle.setAttribute('r', '10');
+      var line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line1.setAttribute('x1', '12');
+      line1.setAttribute('y1', '8');
+      line1.setAttribute('x2', '12');
+      line1.setAttribute('y2', '12');
+      var line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line2.setAttribute('x1', '12');
+      line2.setAttribute('y1', '16');
+      line2.setAttribute('x2', '12.01');
+      line2.setAttribute('y2', '16');
+      avisoIcon.appendChild(circle);
+      avisoIcon.appendChild(line1);
+      avisoIcon.appendChild(line2);
 
-    actions.appendChild(btnRemarcar);
-    actions.appendChild(btnCancelar);
+      var avisoText = document.createElement('span');
+      avisoText.textContent = ag.motivo_bloqueio || 'Prazo máximo de 2 horas para cancelar/reagendar excedido';
+
+      avisoEl.appendChild(avisoIcon);
+      avisoEl.appendChild(avisoText);
+      actions.appendChild(avisoEl);
+    } else {
+      var btnRemarcar = document.createElement('button');
+      btnRemarcar.type = 'button';
+      btnRemarcar.className = 'btn btn-reschedule btn-sm';
+      btnRemarcar.innerHTML = '<span class="btn-text">Remarcar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
+      btnRemarcar.addEventListener('click', function (ref, idx) {
+        return function () { openModal('remarcar', ref, idx); };
+      }(ag.ref, index));
+
+      var btnCancelar = document.createElement('button');
+      btnCancelar.type = 'button';
+      btnCancelar.className = 'btn btn-cancel-card btn-sm';
+      btnCancelar.innerHTML = '<span class="btn-text">Cancelar</span><span class="btn-loader" style="display:none;"><span class="spinner"></span></span>';
+      btnCancelar.addEventListener('click', function (ref, idx) {
+        return function () { openModal('cancelar', ref, idx); };
+      }(ag.ref, index));
+
+      actions.appendChild(btnRemarcar);
+      actions.appendChild(btnCancelar);
+    }
 
     card.appendChild(dtEl);
     card.appendChild(diaEl);
