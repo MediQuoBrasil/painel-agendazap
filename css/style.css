@@ -475,6 +475,30 @@ body::before {
   flex-wrap: wrap;
 }
 
+.ag-actions-blocked {
+  gap: 0;
+}
+
+.ag-blocked-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.82rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-warning);
+  background: rgba(251, 191, 36, 0.08);
+  border-left: 3px solid var(--color-warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  line-height: 1.4;
+}
+
+.ag-blocked-notice svg {
+  flex-shrink: 0;
+}
+
 /* ─── Tab Toggle ────────────────────────────────────────── */
 
 .tab-toggle {
