@@ -259,6 +259,69 @@ body::before {
   flex: 1;
 }
 
+/* ─── Checkbox Salvar Dados ─────────────────────────────── */
+
+.field-checkbox {
+  margin-bottom: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.checkbox-custom {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--color-input-border);
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-top: 1px;
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkbox-custom {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkbox-custom::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: -1px;
+}
+
+.checkbox-label input[type="checkbox"]:focus-visible + .checkbox-custom {
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.15);
+}
+
+.checkbox-text {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
 /* ─── Botões ────────────────────────────────────────────── */
 
 .btn {
