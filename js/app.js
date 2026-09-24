@@ -724,6 +724,17 @@
     var dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     var diaSemana = dias[dateObj.getDay()] || '';
 
+    var liveBadge = null;
+    if (ag.em_andamento) {
+      card.classList.add('ag-card-live');
+      liveBadge = document.createElement('span');
+      liveBadge.className = 'ag-live-badge';
+      var liveDot = document.createElement('span');
+      liveDot.className = 'ag-live-dot';
+      liveBadge.appendChild(liveDot);
+      liveBadge.appendChild(document.createTextNode('Consulta em andamento'));
+    }
+
     var dtEl = document.createElement('div');
     dtEl.className = 'ag-datetime';
     dtEl.textContent = dataPart + ' — ' + horaDisplay;
@@ -749,7 +760,13 @@
     var actions = document.createElement('div');
     actions.className = 'ag-actions';
 
-    if (ag.bloqueado) {
+    if (ag.em_andamento) {
+      actions.className = 'ag-actions ag-actions-blocked';
+      var liveNotice = document.createElement('div');
+      liveNotice.className = 'ag-live-notice';
+      liveNotice.textContent = 'Consulta em andamento - Chame o profissional se ainda não iniciou';
+      actions.appendChild(liveNotice);
+    } else if (ag.bloqueado) {
       actions.className = 'ag-actions ag-actions-blocked';
       var avisoEl = document.createElement('div');
       avisoEl.className = 'ag-blocked-notice';
@@ -808,6 +825,7 @@
       actions.appendChild(btnCancelar);
     }
 
+    if (liveBadge) card.appendChild(liveBadge);
     card.appendChild(dtEl);
     card.appendChild(diaEl);
     card.appendChild(servEl);
@@ -913,7 +931,7 @@
 
   function showLinkModal(link, minutos) {
     dom.linkTitle.textContent = 'Pronto para remarcar!';
-    dom.linkText.textContent = 'Use o link abaixo para escolher um novo horário. O link expira em ' + (minutos || 120) + ' minutos.';
+    dom.linkText.textContent = 'Use o link abaixo para escolher um novo horário. O link expira em ' + (minutos || 120) + ' minutos. Atenção: este link serve apenas para agendar — a consulta acontece pelo aplicativo, enviando mensagem ao profissional.';
     dom.linkHref.href = link;
     dom.linkOverlay.style.display = '';
   }
