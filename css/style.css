@@ -846,3 +846,103 @@ body::before {
     padding: 1.5rem 1.25rem;
   }
 }
+/* ─── Aviso: atendimento é pelo aplicativo ──────────────── */
+/* Cores fixas (não dependem do tema) para manter o contraste
+   igual no modo claro e escuro. Troca de cor a cada 0,8s —
+   abaixo do limite de 3 piscadas/s (WCAG 2.3.1). */
+
+.app-alert {
+  margin: 0 0.25rem 1.75rem;
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius-md);
+  border: 3px solid currentColor;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  animation:
+    appAlertColors 2.4s linear infinite,
+    appAlertPulse 1.2s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.app-alert-text {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+@keyframes appAlertColors {
+  0%, 30%   { background: #e54560; color: #ffffff; }
+  33%, 63%  { background: #fbbf24; color: #1c1230; }
+  66%, 96%  { background: #491e9c; color: #ffffff; }
+  100%      { background: #e54560; color: #ffffff; }
+}
+
+@keyframes appAlertPulse {
+  from { transform: scale(0.96); }
+  to   { transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-alert {
+    animation: appAlertColors 4.8s linear infinite;
+  }
+}
+
+/* ─── Card: consulta em andamento ───────────────────────── */
+
+.ag-card.ag-card-live {
+  border: 2px solid var(--color-success);
+  box-shadow: 0 0 0 4px var(--color-success-soft);
+}
+
+.ag-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  margin-bottom: 0.65rem;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.ag-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  animation: liveDot 1.2s ease-in-out infinite;
+}
+
+@keyframes liveDot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.ag-live-notice {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.86rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  border-left: 3px solid var(--color-success);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .app-alert {
+    padding: 0.9rem 1rem;
+  }
+  .app-alert-text {
+    font-size: 0.95rem;
+  }
+}
